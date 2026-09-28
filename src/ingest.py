@@ -64,3 +64,52 @@ def load_upload(filename: str, file_bytes: bytes) -> list[PageRecord]:
     raise ValueError(
         f"Unsupported file type for '{filename}'. Use PDF, .txt, or .md."
     )
+
+
+@dataclass(frozen=True)
+class TextChunk:
+    """A slice of document text with citation metadata."""
+
+    text: str
+    source_file: str
+    page_number: int
+    chunk_index: int
+
+
+def chunk_pages(
+    pages: list[PageRecord],
+    chunk_size: int,
+    overlap: int,
+) -> list[TextChunk]:
+    """Split page text into overlapping character chunks."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be >= 0 and less than chunk_size.")
+
+    chunks: list[TextChunk] = []
+    global_index = 0
+
+    for page in pages:
+        text = page.text
+        if not text:
+            continue
+        start = 0
+        while start < len(text):
+            end = min(start + chunk_size, len(text))
+            slice_text = text[start:end].strip()
+            if slice_text:
+                chunks.append(
+                    TextChunk(
+                        text=slice_text,
+                        source_file=page.source_file,
+                        page_number=page.page_number,
+                        chunk_index=global_index,
+                    )
+                )
+                global_index += 1
+            if end >= len(text):
+                break
+            start = end - overlap
+
+    return chunks
