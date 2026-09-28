@@ -93,16 +93,23 @@ def main() -> None:
         accept_multiple_files=True,
     )
 
-    if uploaded and st.button("Ingest documents"):
-        files = [(f.name, f.getvalue()) for f in uploaded]
-        chunk_size = st.session_state.get("chunk_size", DEFAULT_CHUNK_SIZE)
-        overlap = st.session_state.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP)
-        try:
-            total = ingest_uploads(files, chunk_size, overlap, embedder, collection)
-            st.session_state.retriever_state = rebuild_bm25_index(collection)
-            st.success(f"Indexed {total} chunks from {len(files)} file(s).")
-        except ValueError as exc:
-            st.error(str(exc))
+    if st.button("Ingest documents", disabled=not uploaded):
+        if not uploaded:
+            st.warning("Upload at least one document before ingesting.")
+        else:
+            files = [(f.name, f.getvalue()) for f in uploaded]
+            chunk_size = st.session_state.get("chunk_size", DEFAULT_CHUNK_SIZE)
+            overlap = st.session_state.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP)
+            try:
+                total = ingest_uploads(
+                    files, chunk_size, overlap, embedder, collection
+                )
+                st.session_state.retriever_state = rebuild_bm25_index(collection)
+                st.success(f"Indexed {total} chunks from {len(files)} file(s).")
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"Ingestion failed: {exc}")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -117,6 +124,12 @@ def main() -> None:
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
+            if collection.count() == 0:
+                st.warning(
+                    "No documents indexed yet. Upload files and click Ingest documents."
+                )
+                return
+
             try:
                 llm = get_llm_provider()
             except LLMError as exc:
@@ -126,8 +139,15 @@ def main() -> None:
             mode = st.session_state.get("retrieval_mode", RetrievalMode.VECTOR)
             top_k = st.session_state.get("top_k", DEFAULT_TOP_K)
             state: RetrieverState = st.session_state.retriever_state
-            chunks = retrieve(mode, collection, embedder, state, prompt, top_k)
-            answer = generate_answer(llm, prompt, chunks)
+            try:
+                chunks = retrieve(mode, collection, embedder, state, prompt, top_k)
+                answer = generate_answer(llm, prompt, chunks)
+            except LLMError as exc:
+                st.error(str(exc))
+                return
+            except Exception as exc:
+                st.error(f"Could not generate an answer: {exc}")
+                return
             st.markdown(answer.text)
             citation_payload = [
                 {
