@@ -31,11 +31,26 @@ class RetrievalMode(str, Enum):
 
 @dataclass
 class RetrieverState:
-    """Placeholder for BM25 state (extended in hybrid retrieval)."""
+    """In-memory corpus mirror for BM25 (BM25 index added on hybrid branch)."""
 
     chunk_ids: list[str]
     corpus: list[str]
     metadatas: list[dict]
+    bm25: object | None = None
+
+
+def rebuild_bm25_index(collection: Collection) -> RetrieverState:
+    """Sync in-memory corpus from Chroma (BM25 scoring added later)."""
+    data = collection.get(include=["documents", "metadatas"])
+    ids = data.get("ids") or []
+    documents = data.get("documents") or []
+    metadatas = data.get("metadatas") or []
+    return RetrieverState(
+        chunk_ids=list(ids),
+        corpus=list(documents),
+        metadatas=list(metadatas),
+        bm25=None,
+    )
 
 
 def _rows_from_chroma_result(result: dict) -> list[RetrievedChunk]:
