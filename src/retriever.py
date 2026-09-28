@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from chromadb.api.models.Collection import Collection
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    from chromadb.api.models.Collection import Collection
+    from sentence_transformers import SentenceTransformer
 
 from src.ingest import embed_texts
 

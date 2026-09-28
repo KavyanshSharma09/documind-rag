@@ -5,12 +5,14 @@ from __future__ import annotations
 import io
 import uuid
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-import chromadb
-from chromadb.api.models.Collection import Collection
 from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    import chromadb
+    from chromadb.api.models.Collection import Collection
+    from sentence_transformers import SentenceTransformer
 
 from src.config import CHROMA_PERSIST_DIR, COLLECTION_NAME, EMBEDDING_MODEL
 
@@ -124,6 +126,8 @@ def chunk_pages(
 
 def get_chroma_client() -> chromadb.PersistentClient:
     """Return a persistent Chroma client, creating the directory if needed."""
+    import chromadb
+
     CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
     return chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
 
@@ -138,6 +142,8 @@ def get_or_create_collection(client: chromadb.PersistentClient) -> Collection:
 
 def build_embedder(model_name: str = EMBEDDING_MODEL) -> SentenceTransformer:
     """Load the sentence-transformers embedding model."""
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(model_name)
 
 
