@@ -1,0 +1,22 @@
+[
+  {"question": "What does RAG stand for?", "ground_truth": "RAG stands for retrieval-augmented generation.", "source_page": 1},
+  {"question": "What does DocuMind help users do?", "ground_truth": "DocuMind helps users ask questions about documents.", "source_page": 1},
+  {"question": "Why is the sample handbook included?", "ground_truth": "It is included for reproducible evaluation experiments.", "source_page": 1},
+  {"question": "How does the ingestion pipeline extract PDF text?", "ground_truth": "It extracts PDF text page by page.", "source_page": 2},
+  {"question": "How are text and Markdown files treated?", "ground_truth": "A text or Markdown file is treated as one logical page.", "source_page": 2},
+  {"question": "Why do chunks overlap?", "ground_truth": "Chunks overlap so a fact near a boundary remains discoverable.", "source_page": 2},
+  {"question": "What are the default chunk size and overlap?", "ground_truth": "The default chunk size is 800 characters and the overlap is 100.", "source_page": 2},
+  {"question": "Which embedding model does DocuMind use?", "ground_truth": "DocuMind uses all-MiniLM-L6-v2 from sentence-transformers.", "source_page": 3},
+  {"question": "Where are vectors stored?", "ground_truth": "Vectors and metadata are stored in a persistent local ChromaDB collection.", "source_page": 3},
+  {"question": "Which metadata supports citations?", "ground_truth": "The metadata records the source filename, one-indexed page number, and chunk index.", "source_page": 3},
+  {"question": "What does vector retrieval compare?", "ground_truth": "It compares the question embedding with stored chunk vectors.", "source_page": 4},
+  {"question": "What does hybrid retrieval combine?", "ground_truth": "Hybrid retrieval combines vector results with lexical BM25 results.", "source_page": 4},
+  {"question": "What does RRF reward?", "ground_truth": "Reciprocal Rank Fusion rewards chunks that appear near the top of both ranked lists.", "source_page": 4},
+  {"question": "What is the RRF contribution formula?", "ground_truth": "Each result contributes 1 divided by k plus rank.", "source_page": 4},
+  {"question": "What does the answer prompt instruct the model to use?", "ground_truth": "It instructs the model to use only the retrieved context.", "source_page": 5},
+  {"question": "What citation format should answers use?", "ground_truth": "Answers should cite sources as [filename, p.N].", "source_page": 5},
+  {"question": "What must the model say when context lacks the answer?", "ground_truth": "It must say: I couldn't find this in the documents.", "source_page": 5},
+  {"question": "Which retrieval metrics does the harness measure?", "ground_truth": "It measures hit rate at k and mean reciprocal rank, or MRR.", "source_page": 6},
+  {"question": "How is answer quality scored?", "ground_truth": "A configured language model can judge answer quality on a one-to-five scale.", "source_page": 6},
+  {"question": "Where are evaluation results saved?", "ground_truth": "Evaluation results are saved as CSV for README tables.", "source_page": 6}
+]
