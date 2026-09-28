@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from chromadb.api.models.Collection import Collection
+from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from src.ingest import embed_texts
@@ -31,25 +32,33 @@ class RetrievalMode(str, Enum):
 
 @dataclass
 class RetrieverState:
-    """In-memory corpus mirror for BM25 (BM25 index added on hybrid branch)."""
+    """In-memory BM25 index aligned with Chroma documents."""
 
     chunk_ids: list[str]
     corpus: list[str]
     metadatas: list[dict]
-    bm25: object | None = None
+    bm25: BM25Okapi | None = None
+
+
+def _tokenize(text: str) -> list[str]:
+    return text.lower().split()
 
 
 def rebuild_bm25_index(collection: Collection) -> RetrieverState:
-    """Sync in-memory corpus from Chroma (BM25 scoring added later)."""
+    """Load all documents from Chroma and build a BM25 index."""
     data = collection.get(include=["documents", "metadatas"])
     ids = data.get("ids") or []
     documents = data.get("documents") or []
     metadatas = data.get("metadatas") or []
+    if not documents:
+        return RetrieverState(chunk_ids=[], corpus=[], metadatas=[], bm25=None)
+
+    tokenized = [_tokenize(doc) for doc in documents]
     return RetrieverState(
         chunk_ids=list(ids),
         corpus=list(documents),
         metadatas=list(metadatas),
-        bm25=None,
+        bm25=BM25Okapi(tokenized),
     )
 
 
@@ -95,6 +104,34 @@ def retrieve_vector(
     return _rows_from_chroma_result(result)
 
 
+def retrieve_bm25(
+    state: RetrieverState,
+    query: str,
+    top_k: int,
+) -> list[RetrievedChunk]:
+    """Lexical BM25 retrieval over the in-memory corpus."""
+    if not state.bm25 or not state.corpus:
+        return []
+
+    scores = state.bm25.get_scores(_tokenize(query))
+    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    chunks: list[RetrievedChunk] = []
+    for rank_idx in ranked:
+        if scores[rank_idx] <= 0:
+            continue
+        meta = state.metadatas[rank_idx] or {}
+        chunks.append(
+            RetrievedChunk(
+                text=state.corpus[rank_idx],
+                source_file=str(meta.get("source_file", "unknown")),
+                page_number=int(meta.get("page_number", 1)),
+                chunk_index=int(meta.get("chunk_index", 0)),
+                score=float(scores[rank_idx]),
+            )
+        )
+    return chunks
+
+
 def retrieve(
     mode: RetrievalMode,
     collection: Collection,
@@ -103,8 +140,7 @@ def retrieve(
     query: str,
     top_k: int,
 ) -> list[RetrievedChunk]:
-    """Dispatch retrieval by mode (hybrid added in a later commit)."""
-    _ = state
+    """Dispatch retrieval by mode."""
     if mode == RetrievalMode.HYBRID:
-        return retrieve_vector(collection, embedder, query, top_k)
+        return retrieve_bm25(state, query, top_k)
     return retrieve_vector(collection, embedder, query, top_k)
