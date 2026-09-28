@@ -7,4 +7,5 @@ groq==0.13.0
 google-generativeai==0.8.3
 httpx==0.28.1
 python-dotenv==1.0.1
+reportlab==4.2.5
 pytest==8.3.4
