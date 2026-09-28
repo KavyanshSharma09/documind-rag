@@ -132,6 +132,37 @@ def retrieve_bm25(
     return chunks
 
 
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[RetrievedChunk]],
+    k: int = 60,
+    top_k: int = 4,
+) -> list[RetrievedChunk]:
+    """Fuse multiple ranked lists with RRF."""
+    fused_scores: dict[tuple[str, int, int], float] = {}
+    chunk_map: dict[tuple[str, int, int], RetrievedChunk] = {}
+
+    for ranked in ranked_lists:
+        for rank, chunk in enumerate(ranked, start=1):
+            key = (chunk.source_file, chunk.page_number, chunk.chunk_index)
+            fused_scores[key] = fused_scores.get(key, 0.0) + 1.0 / (k + rank)
+            chunk_map[key] = chunk
+
+    ordered = sorted(fused_scores.items(), key=lambda item: item[1], reverse=True)
+    results: list[RetrievedChunk] = []
+    for key, score in ordered[:top_k]:
+        base = chunk_map[key]
+        results.append(
+            RetrievedChunk(
+                text=base.text,
+                source_file=base.source_file,
+                page_number=base.page_number,
+                chunk_index=base.chunk_index,
+                score=score,
+            )
+        )
+    return results
+
+
 def retrieve(
     mode: RetrievalMode,
     collection: Collection,
@@ -141,6 +172,8 @@ def retrieve(
     top_k: int,
 ) -> list[RetrievedChunk]:
     """Dispatch retrieval by mode."""
-    if mode == RetrievalMode.HYBRID:
-        return retrieve_bm25(state, query, top_k)
-    return retrieve_vector(collection, embedder, query, top_k)
+    if mode == RetrievalMode.VECTOR:
+        return retrieve_vector(collection, embedder, query, top_k)
+    vector_hits = retrieve_vector(collection, embedder, query, top_k=top_k * 2)
+    bm25_hits = retrieve_bm25(state, query, top_k=top_k * 2)
+    return reciprocal_rank_fusion([vector_hits, bm25_hits], top_k=top_k)
