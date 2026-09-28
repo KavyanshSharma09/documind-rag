@@ -1,5 +1,3 @@
-"""LLM provider abstraction (Groq, Gemini, Ollama)."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -16,20 +14,15 @@ from src.config import (
 
 
 class LLMError(Exception):
-    """Raised when an LLM call fails or is misconfigured."""
-
+    pass
 
 class BaseLLMProvider(ABC):
-    """Common interface for chat completion providers."""
-
     @abstractmethod
     def complete(self, prompt: str) -> str:
-        """Return model text for a single-turn prompt."""
+        pass
 
 
 class GroqProvider(BaseLLMProvider):
-    """Groq chat completions."""
-
     def __init__(self, api_key: str | None = None, model: str = GROQ_MODEL) -> None:
         key = api_key or GROQ_API_KEY
         if not key:
@@ -55,8 +48,6 @@ class GroqProvider(BaseLLMProvider):
 
 
 class GeminiProvider(BaseLLMProvider):
-    """Google Gemini generateContent API."""
-
     def __init__(self, api_key: str | None = None, model: str = GEMINI_MODEL) -> None:
         key = api_key or GEMINI_API_KEY
         if not key:
@@ -77,8 +68,6 @@ class GeminiProvider(BaseLLMProvider):
 
 
 class OllamaProvider(BaseLLMProvider):
-    """Local Ollama chat API."""
-
     def __init__(
         self,
         base_url: str | None = None,
@@ -110,7 +99,6 @@ class OllamaProvider(BaseLLMProvider):
 
 
 def get_llm_provider(provider_name: str | None = None) -> BaseLLMProvider:
-    """Factory for the configured LLM provider."""
     name = (provider_name or LLM_PROVIDER).lower().strip()
     if name == "groq":
         return GroqProvider()

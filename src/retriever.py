@@ -1,5 +1,3 @@
-"""Vector, BM25, and hybrid retrieval."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,8 +15,6 @@ from src.ingest import embed_texts
 
 @dataclass(frozen=True)
 class RetrievedChunk:
-    """A chunk returned from retrieval with score and citation metadata."""
-
     text: str
     source_file: str
     page_number: int
@@ -27,16 +23,12 @@ class RetrievedChunk:
 
 
 class RetrievalMode(str, Enum):
-    """Supported retrieval strategies."""
-
     VECTOR = "vector"
     HYBRID = "hybrid"
 
 
 @dataclass
 class RetrieverState:
-    """In-memory BM25 index aligned with Chroma documents."""
-
     chunk_ids: list[str]
     corpus: list[str]
     metadatas: list[dict]
@@ -48,7 +40,6 @@ def _tokenize(text: str) -> list[str]:
 
 
 def rebuild_bm25_index(collection: Collection) -> RetrieverState:
-    """Load all documents from Chroma and build a BM25 index."""
     data = collection.get(include=["documents", "metadatas"])
     ids = data.get("ids") or []
     documents = data.get("documents") or []
@@ -66,26 +57,26 @@ def rebuild_bm25_index(collection: Collection) -> RetrieverState:
 
 
 def _rows_from_chroma_result(result: dict) -> list[RetrievedChunk]:
-    chunks: list[RetrievedChunk] = []
+    res: list[RetrievedChunk] = []
     ids = result.get("ids", [[]])[0]
     documents = result.get("documents", [[]])[0]
     metadatas = result.get("metadatas", [[]])[0]
     distances = result.get("distances", [[]])[0]
 
-    for idx, _doc_id in enumerate(ids):
-        meta = metadatas[idx] or {}
-        dist = distances[idx] if idx < len(distances) else 0.0
-        score = 1.0 / (1.0 + float(dist))
-        chunks.append(
+    for i, _id in enumerate(ids):
+        meta = metadatas[i] or {}
+        dst = distances[i] if i < len(distances) else 0.0
+        sco = 1.0 / (1.0 + float(dst))
+        res.append(
             RetrievedChunk(
-                text=documents[idx] or "",
+                text=documents[i] or "",
                 source_file=str(meta.get("source_file", "unknown")),
                 page_number=int(meta.get("page_number", 1)),
                 chunk_index=int(meta.get("chunk_index", 0)),
-                score=score,
+                score=sco,
             )
         )
-    return chunks
+    return res
 
 
 def retrieve_vector(
@@ -94,7 +85,6 @@ def retrieve_vector(
     query: str,
     top_k: int,
 ) -> list[RetrievedChunk]:
-    """Cosine similarity search in Chroma."""
     if collection.count() == 0:
         return []
 
@@ -112,25 +102,24 @@ def retrieve_bm25(
     query: str,
     top_k: int,
 ) -> list[RetrievedChunk]:
-    """Lexical BM25 retrieval over the in-memory corpus."""
     if not state.bm25 or not state.corpus:
         return []
 
-    scores = state.bm25.get_scores(_tokenize(query))
-    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-    chunks: list[RetrievedChunk] = []
-    for rank_idx in ranked:
-        meta = state.metadatas[rank_idx] or {}
-        chunks.append(
+    scos = state.bm25.get_scores(_tokenize(query))
+    rnk = sorted(range(len(scos)), key=lambda i: scos[i], reverse=True)[:top_k]
+    res: list[RetrievedChunk] = []
+    for i in rnk:
+        meta = state.metadatas[i] or {}
+        res.append(
             RetrievedChunk(
-                text=state.corpus[rank_idx],
+                text=state.corpus[i],
                 source_file=str(meta.get("source_file", "unknown")),
                 page_number=int(meta.get("page_number", 1)),
                 chunk_index=int(meta.get("chunk_index", 0)),
-                score=float(scores[rank_idx]),
+                score=float(scos[i]),
             )
         )
-    return chunks
+    return res
 
 
 def reciprocal_rank_fusion(
@@ -138,30 +127,29 @@ def reciprocal_rank_fusion(
     k: int = 60,
     top_k: int = 4,
 ) -> list[RetrievedChunk]:
-    """Fuse multiple ranked lists with RRF."""
-    fused_scores: dict[tuple[str, int, int], float] = {}
-    chunk_map: dict[tuple[str, int, int], RetrievedChunk] = {}
+    fs: dict[tuple[str, int, int], float] = {}
+    cm: dict[tuple[str, int, int], RetrievedChunk] = {}
 
-    for ranked in ranked_lists:
-        for rank, chunk in enumerate(ranked, start=1):
-            key = (chunk.source_file, chunk.page_number, chunk.chunk_index)
-            fused_scores[key] = fused_scores.get(key, 0.0) + 1.0 / (k + rank)
-            chunk_map[key] = chunk
+    for rnk in ranked_lists:
+        for i, chun in enumerate(rnk, start=1):
+            key = (chun.source_file, chun.page_number, chun.chunk_index)
+            fs[key] = fs.get(key, 0.0) + 1.0 / (k + i)
+            cm[key] = chun
 
-    ordered = sorted(fused_scores.items(), key=lambda item: item[1], reverse=True)
-    results: list[RetrievedChunk] = []
-    for key, score in ordered[:top_k]:
-        base = chunk_map[key]
-        results.append(
+    ordered = sorted(fs.items(), key=lambda x: x[1], reverse=True)
+    res: list[RetrievedChunk] = []
+    for key, sco in ordered[:top_k]:
+        base = cm[key]
+        res.append(
             RetrievedChunk(
                 text=base.text,
                 source_file=base.source_file,
                 page_number=base.page_number,
                 chunk_index=base.chunk_index,
-                score=score,
+                score=sco,
             )
         )
-    return results
+    return res
 
 
 def retrieve(
@@ -172,7 +160,6 @@ def retrieve(
     query: str,
     top_k: int,
 ) -> list[RetrievedChunk]:
-    """Dispatch retrieval by mode."""
     if mode == RetrievalMode.VECTOR:
         return retrieve_vector(collection, embedder, query, top_k)
     vector_hits = retrieve_vector(collection, embedder, query, top_k=top_k * 2)

@@ -1,5 +1,3 @@
-"""Retriever unit tests (no network or API calls)."""
-
 from __future__ import annotations
 
 from src.retriever import (

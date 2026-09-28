@@ -1,5 +1,3 @@
-"""Run retrieval and optional LLM-judge evaluation across DocuMind configs."""
-
 from __future__ import annotations
 
 import argparse
@@ -25,7 +23,6 @@ RESULTS_PATH = ROOT / "eval" / "results.csv"
 
 
 def load_questions() -> list[dict[str, Any]]:
-    """Load and minimally validate the question dataset."""
     questions = json.loads(QUESTIONS_PATH.read_text(encoding="utf-8"))
     if not isinstance(questions, list) or len(questions) != 20:
         raise ValueError("eval/questions.json must contain exactly 20 questions.")
@@ -33,7 +30,6 @@ def load_questions() -> list[dict[str, Any]]:
 
 
 def reciprocal_rank(chunks: list[Any], source_page: int) -> float:
-    """Return the reciprocal rank of the target page, or zero if absent."""
     for rank, chunk in enumerate(chunks, start=1):
         if chunk.page_number == source_page:
             return 1.0 / rank
@@ -41,7 +37,6 @@ def reciprocal_rank(chunks: list[Any], source_page: int) -> float:
 
 
 def judge_prompt(question: str, answer: str, ground_truth: str) -> str:
-    """Build a strict one-to-five scoring prompt."""
     return (
         "Score the answer from 1 to 5 for factual agreement with the reference. "
         "Return only one integer.\n"
@@ -50,7 +45,6 @@ def judge_prompt(question: str, answer: str, ground_truth: str) -> str:
 
 
 def judge_score(llm: Any, question: str, answer: str, ground_truth: str) -> float | None:
-    """Ask the configured provider for a score, returning None on malformed output."""
     try:
         raw = llm.complete(judge_prompt(question, answer, ground_truth)).strip()
         score = float(raw.split()[0])
@@ -68,7 +62,6 @@ def evaluate_configuration(
     top_k: int,
     llm: Any | None,
 ) -> dict[str, Any]:
-    """Build one temporary index and score every question against it."""
     client = chromadb.EphemeralClient()
     collection = get_or_create_collection(client)
     chunks = chunk_pages(pages, chunk_size, overlap=min(100, chunk_size - 1))
@@ -98,7 +91,6 @@ def evaluate_configuration(
 
 
 def write_results(rows: list[dict[str, Any]]) -> None:
-    """Write CSV results and print a pasteable Markdown table."""
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     fields = ["mode", "chunk_size", "top_k", "hit_rate_at_k", "mrr", "answer_quality"]
     with RESULTS_PATH.open("w", newline="", encoding="utf-8") as handle:

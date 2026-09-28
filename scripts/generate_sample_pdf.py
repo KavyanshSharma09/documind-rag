@@ -1,5 +1,3 @@
-"""Generate the deterministic sample PDF used by the evaluation harness."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -67,7 +65,6 @@ PAGES = [
 
 
 def generate(output_path: Path) -> None:
-    """Write the sample handbook PDF to ``output_path``."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pdf = canvas.Canvas(str(output_path), pagesize=letter)
     width, height = letter

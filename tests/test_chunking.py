@@ -1,5 +1,3 @@
-"""Unit tests for text chunking."""
-
 from src.ingest import PageRecord, chunk_pages
 
 

@@ -1,5 +1,3 @@
-"""RAG prompt assembly, grounded generation, and citation formatting."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,8 +9,6 @@ from src.retriever import RetrievedChunk
 
 @dataclass(frozen=True)
 class Citation:
-    """Structured citation for UI display."""
-
     source_file: str
     page_number: int
     excerpt: str
@@ -20,27 +16,23 @@ class Citation:
 
 @dataclass(frozen=True)
 class RAGAnswer:
-    """Model answer plus retrieval citations."""
-
     text: str
     citations: list[Citation]
     chunks: list[RetrievedChunk]
 
 
 def format_context(chunks: list[RetrievedChunk]) -> str:
-    """Build numbered context blocks for the prompt."""
     if not chunks:
         return "(no context retrieved)"
-    blocks: list[str] = []
-    for i, chunk in enumerate(chunks, start=1):
-        blocks.append(
-            f"[{i}] Source: [{chunk.source_file}, p.{chunk.page_number}]\n{chunk.text}"
+    res: list[str] = []
+    for i, chun in enumerate(chunks, start=1):
+        res.append(
+            f"[{i}] Source: [{chun.source_file}, p.{chun.page_number}]\n{chun.text}"
         )
-    return "\n\n".join(blocks)
+    return "\n\n".join(res)
 
 
 def chunks_to_citations(chunks: list[RetrievedChunk]) -> list[Citation]:
-    """Map retrieved chunks to citation objects."""
     return [
         Citation(
             source_file=c.source_file,
@@ -52,7 +44,6 @@ def chunks_to_citations(chunks: list[RetrievedChunk]) -> list[Citation]:
 
 
 def build_prompt(question: str, chunks: list[RetrievedChunk]) -> str:
-    """Fill the grounded prompt template."""
     return PROMPT_TEMPLATE.format(
         system_instruction=SYSTEM_INSTRUCTION,
         context=format_context(chunks),
@@ -65,7 +56,6 @@ def generate_answer(
     question: str,
     chunks: list[RetrievedChunk],
 ) -> RAGAnswer:
-    """Generate a grounded answer with citations from retrieved chunks."""
     if not chunks:
         return RAGAnswer(
             text=NOT_FOUND_PHRASE,

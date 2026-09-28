@@ -1,5 +1,3 @@
-"""Document loading, chunking, embedding, and ChromaDB indexing."""
-
 from __future__ import annotations
 
 import io
@@ -19,15 +17,12 @@ from src.config import CHROMA_PERSIST_DIR, COLLECTION_NAME, EMBEDDING_MODEL
 
 @dataclass(frozen=True)
 class PageRecord:
-    """One page (or whole file) of extracted text with provenance."""
-
     text: str
     page_number: int
     source_file: str
 
 
 def load_pdf(file_bytes: bytes, filename: str) -> list[PageRecord]:
-    """Extract text from a PDF, one record per page (1-indexed page numbers)."""
     try:
         reader = PdfReader(io.BytesIO(file_bytes))
     except Exception as exc:
@@ -50,7 +45,6 @@ def load_pdf(file_bytes: bytes, filename: str) -> list[PageRecord]:
 
 
 def load_text_or_markdown(content: str, filename: str) -> list[PageRecord]:
-    """Treat a .txt or .md file as a single logical page."""
     text = content.strip()
     if not text:
         raise ValueError(f"File '{filename}' is empty.")
@@ -60,7 +54,6 @@ def load_text_or_markdown(content: str, filename: str) -> list[PageRecord]:
 
 
 def load_upload(filename: str, file_bytes: bytes) -> list[PageRecord]:
-    """Dispatch loader by file extension."""
     lower = filename.lower()
     if lower.endswith(".pdf"):
         return load_pdf(file_bytes, filename)
@@ -77,8 +70,6 @@ def load_upload(filename: str, file_bytes: bytes) -> list[PageRecord]:
 
 @dataclass(frozen=True)
 class TextChunk:
-    """A slice of document text with citation metadata."""
-
     text: str
     source_file: str
     page_number: int
@@ -90,42 +81,40 @@ def chunk_pages(
     chunk_size: int,
     overlap: int,
 ) -> list[TextChunk]:
-    """Split page text into overlapping character chunks."""
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive.")
     if overlap < 0 or overlap >= chunk_size:
         raise ValueError("overlap must be >= 0 and less than chunk_size.")
 
-    chunks: list[TextChunk] = []
-    global_index = 0
+    res: list[TextChunk] = []
+    gi = 0
 
-    for page in pages:
-        text = page.text
+    for pg in pages:
+        text = pg.text
         if not text:
             continue
-        start = 0
-        while start < len(text):
-            end = min(start + chunk_size, len(text))
-            slice_text = text[start:end].strip()
-            if slice_text:
-                chunks.append(
+        x = 0
+        while x < len(text):
+            y = min(x + chunk_size, len(text))
+            part = text[x:y].strip()
+            if part:
+                res.append(
                     TextChunk(
-                        text=slice_text,
-                        source_file=page.source_file,
-                        page_number=page.page_number,
-                        chunk_index=global_index,
+                        text=part,
+                        source_file=pg.source_file,
+                        page_number=pg.page_number,
+                        chunk_index=gi,
                     )
                 )
-                global_index += 1
-            if end >= len(text):
+                gi += 1
+            if y >= len(text):
                 break
-            start = end - overlap
+            x = y - overlap
 
-    return chunks
+    return res
 
 
 def get_chroma_client() -> chromadb.PersistentClient:
-    """Return a persistent Chroma client, creating the directory if needed."""
     import chromadb
 
     CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
@@ -133,7 +122,6 @@ def get_chroma_client() -> chromadb.PersistentClient:
 
 
 def get_or_create_collection(client: chromadb.PersistentClient) -> Collection:
-    """Get or create the DocuMind document collection."""
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
         metadata={"hnsw:space": "cosine"},
@@ -141,7 +129,6 @@ def get_or_create_collection(client: chromadb.PersistentClient) -> Collection:
 
 
 def build_embedder(model_name: str = EMBEDDING_MODEL) -> SentenceTransformer:
-    """Load the sentence-transformers embedding model."""
     from sentence_transformers import SentenceTransformer
 
     return SentenceTransformer(model_name)
@@ -151,7 +138,6 @@ def embed_texts(
     embedder: SentenceTransformer,
     texts: list[str],
 ) -> list[list[float]]:
-    """Embed a batch of strings."""
     vectors = embedder.encode(texts, show_progress_bar=False)
     return vectors.tolist()
 
@@ -161,7 +147,6 @@ def index_chunks(
     chunks: list[TextChunk],
     embedder: SentenceTransformer,
 ) -> int:
-    """Embed and upsert chunks into Chroma. Returns number of chunks indexed."""
     if not chunks:
         return 0
 
@@ -186,7 +171,6 @@ def index_chunks(
 
 
 def clear_index(client: chromadb.PersistentClient) -> Collection:
-    """Delete and recreate the document collection."""
     try:
         client.delete_collection(COLLECTION_NAME)
     except ValueError:
@@ -201,7 +185,6 @@ def ingest_uploads(
     embedder: SentenceTransformer,
     collection: Collection,
 ) -> int:
-    """Load, chunk, and index uploaded files. Returns total chunks added."""
     total = 0
     for filename, data in files:
         pages = load_upload(filename, data)
