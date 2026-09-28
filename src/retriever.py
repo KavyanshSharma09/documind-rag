@@ -120,8 +120,6 @@ def retrieve_bm25(
     ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     chunks: list[RetrievedChunk] = []
     for rank_idx in ranked:
-        if scores[rank_idx] <= 0:
-            continue
         meta = state.metadatas[rank_idx] or {}
         chunks.append(
             RetrievedChunk(

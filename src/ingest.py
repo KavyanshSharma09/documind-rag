@@ -212,4 +212,4 @@ def ingest_uploads(
     return total
 
 
-EmbedderFactory = Callable[[], SentenceTransformer]
+EmbedderFactory = Callable[[], "SentenceTransformer"]
