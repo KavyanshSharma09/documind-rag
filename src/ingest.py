@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import io
+import uuid
 from dataclasses import dataclass
+from typing import Callable
 
+import chromadb
+from chromadb.api.models.Collection import Collection
 from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
+
+from src.config import CHROMA_PERSIST_DIR, COLLECTION_NAME, EMBEDDING_MODEL
 
 
 @dataclass(frozen=True)
@@ -113,3 +120,90 @@ def chunk_pages(
             start = end - overlap
 
     return chunks
+
+
+def get_chroma_client() -> chromadb.PersistentClient:
+    """Return a persistent Chroma client, creating the directory if needed."""
+    CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
+    return chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
+
+
+def get_or_create_collection(client: chromadb.PersistentClient) -> Collection:
+    """Get or create the DocuMind document collection."""
+    return client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+
+def build_embedder(model_name: str = EMBEDDING_MODEL) -> SentenceTransformer:
+    """Load the sentence-transformers embedding model."""
+    return SentenceTransformer(model_name)
+
+
+def embed_texts(
+    embedder: SentenceTransformer,
+    texts: list[str],
+) -> list[list[float]]:
+    """Embed a batch of strings."""
+    vectors = embedder.encode(texts, show_progress_bar=False)
+    return vectors.tolist()
+
+
+def index_chunks(
+    collection: Collection,
+    chunks: list[TextChunk],
+    embedder: SentenceTransformer,
+) -> int:
+    """Embed and upsert chunks into Chroma. Returns number of chunks indexed."""
+    if not chunks:
+        return 0
+
+    ids = [f"{c.source_file}:{c.chunk_index}:{uuid.uuid4().hex[:8]}" for c in chunks]
+    documents = [c.text for c in chunks]
+    embeddings = embed_texts(embedder, documents)
+    metadatas = [
+        {
+            "source_file": c.source_file,
+            "page_number": c.page_number,
+            "chunk_index": c.chunk_index,
+        }
+        for c in chunks
+    ]
+    collection.add(
+        ids=ids,
+        documents=documents,
+        embeddings=embeddings,
+        metadatas=metadatas,
+    )
+    return len(chunks)
+
+
+def clear_index(client: chromadb.PersistentClient) -> Collection:
+    """Delete and recreate the document collection."""
+    try:
+        client.delete_collection(COLLECTION_NAME)
+    except ValueError:
+        pass
+    return get_or_create_collection(client)
+
+
+def ingest_uploads(
+    files: list[tuple[str, bytes]],
+    chunk_size: int,
+    overlap: int,
+    embedder: SentenceTransformer,
+    collection: Collection,
+) -> int:
+    """Load, chunk, and index uploaded files. Returns total chunks added."""
+    total = 0
+    for filename, data in files:
+        pages = load_upload(filename, data)
+        chunks = chunk_pages(pages, chunk_size, overlap)
+        if not chunks:
+            raise ValueError(f"No text extracted from '{filename}'.")
+        total += index_chunks(collection, chunks, embedder)
+    return total
+
+
+EmbedderFactory = Callable[[], SentenceTransformer]
